@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/auron-labs/imgopter/compare/v0.2.0...v0.2.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* upload release assets before publishing immutable release ([083a108](https://github.com/auron-labs/imgopter/commit/083a1082f5a2a15e966571d2a321cf0e77193657))
+
 ## [0.2.0](https://github.com/auron-labs/imgopter/compare/v0.1.0...v0.2.0) (2026-10-18)
 
 
