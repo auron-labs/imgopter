@@ -29,6 +29,9 @@ checksum:
     - glob: build/desktop/*
 
 release:
+  use_existing_draft: true
+  preflight:
+    fail_on_error: true
   extra_files:
     - glob: build/desktop/*
 
