@@ -1,50 +1,57 @@
 # imgopter
 
-Make images smaller, resize photos, and convert between formats with a desktop app or the command line. Process a single image or a whole folder, then see how much space you saved.
+Resize, compress, and convert images from a desktop app or the command line. Process individual files or whole folders and see how much space you save.
 
 imgopter reads JPEG, PNG, WebP, GIF, BMP, and TIFF. It saves JPEG, PNG, and WebP, keeping your originals by default.
 
 ![imgopter desktop app with quality, resize, format, and output controls beside the image drop area](assets/screenshot.png)
 
-## Get started
-
-You'll need Go 1.27.1 or newer. Run these commands from the project directory.
+## Install
 
 ### Desktop app
 
-```sh
-go run ./gui
-```
+Download the installer for your platform from the [latest release](https://github.com/auron-labs/imgopter/releases/latest):
 
-1. Click **Add images…** or **Add folder…** to choose your images.
-2. Choose the quality, size, and output format. Leave the defaults to try it out.
-3. Click **Optimize** to process the images and see the results.
+| Platform | Download | Install |
+| --- | --- | --- |
+| macOS (Intel or Apple silicon) | `.dmg` | Open it and drag imgopter to Applications |
+| Windows (x64) | `imgopter Setup … .exe` | Run the installer |
+| Linux (x64) | `.deb` or `imgopter-…-linux-amd64.tar.gz` | Install the Debian package, or extract the archive and run `./imgopter` |
 
-By default, the app saves each result beside its original with `-opt` added to the name: `photo.jpg` becomes `photo-opt.jpg`. Choose an output folder to keep the results together.
+Open imgopter, click **Add images…** or **Add folder…**, adjust the settings, and click **Optimize**. Results are saved beside the originals with `-opt` added to the filename, unless you choose an output folder.
 
 On Linux, the desktop app needs GTK 3 and WebKitGTK installed.
 
 ### Command line
 
-Build the CLI, then pass it an image:
+On macOS and Linux, install with [bin](https://github.com/aaronflorey/bin):
 
 ```sh
-go build -o build/imgopter ./cmd/imgopter
-./build/imgopter photo.jpg
+bin install github.com/auron-labs/imgopter
 ```
 
-This creates `photo-opt.jpg` and prints the original size, new size, and percentage saved. On Windows, build with `-o build/imgopter.exe` and run `./build/imgopter.exe`.
+For a manual install, download `imgopter_<version>_<os>_<arch>.tar.gz` (or `.zip` on Windows) from the [latest release](https://github.com/auron-labs/imgopter/releases/latest). Choose `darwin` for macOS, `linux` for Linux, or `windows` for Windows, and `arm64` or `amd64` for your processor. Extract it and put `imgopter` (`imgopter.exe` on Windows) in a directory on your `PATH`.
+
+CLI archives use underscores in their names; desktop packages use spaces or hyphens. If bin asks you to choose an asset, select the CLI archive.
+
+Try it:
+
+```sh
+imgopter photo.jpg
+```
+
+This creates `photo-opt.jpg` and prints the original size, new size, and percentage saved.
 
 ## Common tasks
 
-Put options before the image paths. You can pass multiple files, a folder, or a quoted glob such as `'photos/*.jpg'`.
+Put options before paths. Pass files, folders, or quoted globs such as `'photos/*.jpg'`.
 
 ### Resize a photo
 
 Fit a photo within 1600 × 1200 pixels while keeping its proportions:
 
 ```sh
-./build/imgopter --max-width 1600 --max-height 1200 photo.jpg
+imgopter --max-width 1600 --max-height 1200 photo.jpg
 ```
 
 Smaller images keep their size. Set just one dimension to limit only the width or height.
@@ -52,7 +59,7 @@ Smaller images keep their size. Set just one dimension to limit only the width o
 For a square thumbnail, use crop mode:
 
 ```sh
-./build/imgopter --mode crop --max-width 400 --max-height 400 photo.jpg
+imgopter --mode crop --max-width 400 --max-height 400 photo.jpg
 ```
 
 This crops from the center to exactly 400 × 400 pixels and can enlarge small images.
@@ -62,35 +69,35 @@ This crops from the center to exactly 400 × 400 pixels and can enlarge small im
 Process a folder and its subfolders, saving the results into `optimized/`:
 
 ```sh
-./build/imgopter --recursive --out optimized photos/
+imgopter --recursive --out optimized photos/
 ```
 
-Output files go directly into `optimized/`; subfolders are not preserved. If two images would produce the same filename, imgopter stops the batch before writing. Process those folders separately or choose different output directories.
+Outputs go directly into `optimized/`, without subfolders. Duplicate output names stop the batch before writing; process those folders separately.
 
 ### Convert to WebP or JPEG
 
 ```sh
-./build/imgopter --format webp photo.jpg
-./build/imgopter --format jpeg --out converted.jpg photo.png
+imgopter --format webp photo.jpg
+imgopter --format jpeg --out converted.jpg photo.png
 ```
 
-The first command creates `photo-opt.webp`. The second saves the result as `converted.jpg`. Without `--format`, JPEG, PNG, and WebP keep their format; GIF, BMP, and TIFF become PNG.
+These create `photo-opt.webp` and `converted.jpg`. Without `--format`, JPEG, PNG, and WebP keep their format; GIF, BMP, and TIFF become PNG.
 
 ### Adjust quality
 
-The default quality is 80. Try a lower value for smaller files, or a higher value to retain more detail:
+Quality defaults to 80. Lower it for smaller files, or raise it to retain more detail:
 
 ```sh
-./build/imgopter --quality 65 photo.jpg
+imgopter --quality 65 photo.jpg
 ```
 
 For PNG, quality below 100 reduces the color palette. Use `--quality 100` to preserve pixel colors:
 
 ```sh
-./build/imgopter --quality 100 screenshot.png
+imgopter --quality 100 screenshot.png
 ```
 
-Run `./build/imgopter --help` for all options, including output naming and parallel workers.
+Run `imgopter --help` for all options, including output naming and parallel workers.
 
 ## What happens to your images
 
@@ -102,7 +109,14 @@ Some images get larger after re-encoding. imgopter shows the size change and sav
 
 ## Development
 
-[mise](https://mise.jdx.dev/) installs the pinned development tools:
+To build from source, use Go 1.27.1 or newer:
+
+```sh
+go build -o build/imgopter ./cmd/imgopter
+go run ./gui
+```
+
+For development, [mise](https://mise.jdx.dev/) installs the pinned tools:
 
 ```sh
 mise install
