@@ -1,0 +1,15 @@
+ls:
+  .ts: camelCase | PascalCase | kebab-case | snake_case
+  .tsx: camelCase | PascalCase | kebab-case | snake_case
+  .js: camelCase | PascalCase | kebab-case | snake_case
+  .py: snake_case
+  .go: snake_case
+
+ignore:
+  - .git
+  - node_modules
+  - dist
+  - build
+  - .venv
+  - target
+  - vendor
