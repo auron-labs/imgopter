@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+project_name: imgopter
+
+builds:
+  - id: cli
+    main: ./cmd/imgopter
+    binary: imgopter
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags: [-s -w]
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - CONTRIBUTING.md
+
+checksum:
+  name_template: checksums.txt
+  extra_files:
+    - glob: build/desktop/*
+
+release:
+  extra_files:
+    - glob: build/desktop/*
+
+changelog:
+  disable: true
