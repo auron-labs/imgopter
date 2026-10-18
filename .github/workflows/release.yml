@@ -48,7 +48,7 @@ jobs:
           pattern: desktop-*
           path: build/desktop
           merge-multiple: true
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: v2.18.2
           args: release --clean
