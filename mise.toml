@@ -12,3 +12,47 @@ workflow = "release.yml"
 
 [env]
 BETTERLEAKS_CONFIG = "{{ config_root }}/.betterleaks.toml"
+
+[tasks.build]
+description = "Build the CLI and package the desktop app"
+depends = ["build:cli", "build:gui"]
+
+[tasks."build:cli"]
+description = "Build the CLI into build/"
+run = "go build -o build/imgopter ./cmd/imgopter"
+
+[tasks."build:gui"]
+description = "Package the desktop app into build/ for the current platform"
+run = "go tool mygo build"
+
+[tasks.dev]
+description = "Run the desktop app with live reload"
+run = "go tool mygo dev"
+
+[tasks."run:cli"]
+description = "Run the CLI (pass flags and image paths after --)"
+run = "go run ./cmd/imgopter"
+
+[tasks.test]
+description = "Run all tests"
+run = "go test ./..."
+
+[tasks."test:race"]
+description = "Run all tests with the race detector"
+run = "go test -race ./..."
+
+[tasks.vet]
+description = "Run Go static analysis"
+run = "go vet ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run"
+
+[tasks.fmt]
+description = "Format Go code with the configured formatters"
+run = "golangci-lint fmt"
+
+[tasks.check]
+description = "Run tests, static analysis, and linting"
+depends = ["test", "vet", "lint"]
