@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"imgopter"
+	"imgopter/internal/output"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -191,14 +192,23 @@ type outcome struct {
 // per input, in input order.
 func process(inputs []string, o imgopter.Options, out, suffix string, overwrite bool, jobs int) []outcome {
 	results := make([]outcome, len(inputs))
+	plans, err := output.Plan(inputs, o.Format, func(in string, f imgopter.Format) string {
+		return outPath(in, f, len(inputs) == 1, out, suffix, overwrite)
+	}, overwrite)
+	if err != nil {
+		for i, in := range inputs {
+			results[i] = outcome{in: in, err: err}
+		}
+		return results
+	}
 	queue := make(chan int)
 	var wg sync.WaitGroup
-	for range min(jobs, len(inputs)) {
+	for range min(max(1, jobs), len(inputs)) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for i := range queue {
-				results[i] = processOne(inputs[i], len(inputs) == 1, o, out, suffix, overwrite)
+				results[i] = processOne(plans[i], o)
 			}
 		}()
 	}
@@ -210,28 +220,18 @@ func process(inputs []string, o imgopter.Options, out, suffix string, overwrite 
 	return results
 }
 
-func processOne(in string, single bool, o imgopter.Options, out, suffix string, overwrite bool) outcome {
-	res, err := imgopter.OptimizeFile(in, o)
-	if err != nil {
-		return outcome{in: in, err: err}
+func processOne(job output.Job, o imgopter.Options) outcome {
+	res, err := imgopter.OptimizeFile(job.Source, o)
+	if err == nil {
+		err = output.WriteFile(job.Dest, res.Data)
 	}
-	dest, err := outPath(in, res.Format, single, out, suffix, overwrite)
-	if err != nil {
-		return outcome{in: in, err: err}
-	}
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return outcome{in: in, err: err}
-	}
-	if err := os.WriteFile(dest, res.Data, 0o644); err != nil {
-		return outcome{in: in, err: err}
-	}
-	return outcome{in: in, out: dest, res: res}
+	return outcome{in: job.Source, out: job.Dest, res: res, err: err}
 }
 
 // outPath resolves where the optimized form of in gets written.
-func outPath(in string, f imgopter.Format, single bool, out, suffix string, overwrite bool) (string, error) {
+func outPath(in string, f imgopter.Format, single bool, out, suffix string, overwrite bool) string {
 	if overwrite {
-		return in, nil
+		return in
 	}
 	stem := strings.TrimSuffix(filepath.Base(in), filepath.Ext(in))
 	var dest string
@@ -243,12 +243,7 @@ func outPath(in string, f imgopter.Format, single bool, out, suffix string, over
 	default:
 		dest = filepath.Join(out, stem+suffix+f.Ext())
 	}
-	inAbs, err1 := filepath.Abs(in)
-	destAbs, err2 := filepath.Abs(dest)
-	if err1 == nil && err2 == nil && inAbs == destAbs {
-		return "", fmt.Errorf("refusing to overwrite %s (use --overwrite)", dest)
-	}
-	return dest, nil
+	return dest
 }
 
 func isImageExt(ext string) bool {

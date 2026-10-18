@@ -27,13 +27,21 @@ func TestRenderShot(t *testing.T) {
 				m.Set(x, y, color.RGBA{
 					uint8(x%255) + uint8(r.Intn(20)),
 					uint8(math.Sin(float64(y)/50) * 100),
-					uint8(y % 255), 255})
+					uint8(y % 255), 255,
+				})
 			}
 		}
 		p := filepath.Join(dir, name)
-		f, _ := os.Create(p)
-		png.Encode(f, m)
-		f.Close()
+		f, err := os.Create(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := png.Encode(f, m); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
 		fi, _ := os.Stat(p)
 		it := &fileItem{path: p, name: name, inSize: fi.Size()}
 		if img := decodeImage(p); img != nil {
@@ -59,5 +67,7 @@ func TestRenderShot(t *testing.T) {
 	if err := png.Encode(out, img); err != nil {
 		t.Fatal(err)
 	}
-	out.Close()
+	if err := out.Close(); err != nil {
+		t.Fatal(err)
+	}
 }

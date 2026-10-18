@@ -15,8 +15,8 @@ import (
 
 func gradient(w, h int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.SetRGBA(x, y, color.RGBA{
 				uint8(x * 255 / max(1, w)),
 				uint8(y * 255 / max(1, h)),
@@ -30,8 +30,8 @@ func gradient(w, h int) *image.RGBA {
 func noise(w, h int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	rnd := rand.New(rand.NewSource(42))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.SetRGBA(x, y, color.RGBA{
 				uint8(rnd.Intn(256)),
 				uint8(rnd.Intn(256)),
@@ -366,8 +366,8 @@ func TestJPEGFlattensAlpha(t *testing.T) {
 	// Transparent image through JPEG must not come out black in transparent
 	// areas: white background should dominate the center pixel.
 	img := image.NewNRGBA(image.Rect(0, 0, 32, 32))
-	for y := 0; y < 32; y++ {
-		for x := 0; x < 32; x++ {
+	for y := range 32 {
+		for x := range 32 {
 			img.SetNRGBA(x, y, color.NRGBA{255, 0, 0, 0}) // fully transparent red
 		}
 	}
@@ -423,5 +423,34 @@ func TestIsSupportedInput(t *testing.T) {
 		if got := IsSupportedInput(in); got != want {
 			t.Fatalf("IsSupportedInput(%q)=%v, want %v", in, got, want)
 		}
+	}
+}
+
+// orientation.webp is a lossless 2x3 color grid with EXIF orientation 6 (90° CW).
+func TestWebPOrientationAppliedBeforeStrippingMetadata(t *testing.T) {
+	src, err := os.ReadFile("testdata/orientation.webp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := Optimize(src, Options{Quality: 100, Format: FormatPNG})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OrigWidth != 3 || res.OrigHeight != 2 || res.Width != 3 || res.Height != 2 {
+		t.Fatalf("incorrect oriented dimensions: %+v", res)
+	}
+	decoded, err := png.Decode(bytes.NewReader(res.Data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The original bottom-left pixel moves to the output's top-left.
+	plain, _, err := image.Decode(bytes.NewReader(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := color.NRGBAModel.Convert(decoded.At(0, 0)).(color.NRGBA)
+	want := color.NRGBAModel.Convert(plain.At(0, 2)).(color.NRGBA)
+	if got != want {
+		t.Fatalf("top-left pixel %v", got)
 	}
 }

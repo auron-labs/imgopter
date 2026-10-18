@@ -6,14 +6,14 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"imgopter"
+	"imgopter/internal/output"
 	"log"
 	"math"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
-
-	"imgopter"
 
 	"github.com/disintegration/imaging"
 	"github.com/egoist/mygo"
@@ -319,7 +319,7 @@ func (a *app) statusBar(c *ui.Context) {
 		BorderWidth(1, 0, 0, 0).BorderColor(t.Border).Children(func() {
 		label := fmt.Sprintf("%d files · %s", len(a.files), humanBytes(in))
 		if len(a.files) == 1 {
-			label = fmt.Sprintf("1 file · %s", humanBytes(in))
+			label = "1 file · " + humanBytes(in)
 		}
 		ui.Text(c, label).FontSize(12).TextColor(t.TextMuted)
 		if out > 0 {
@@ -450,7 +450,7 @@ func decodeImage(path string) image.Image {
 		return nil
 	}
 	if imgopter.SniffFormat(data) == imgopter.FormatWebP {
-		img, err := webp.Decode(bytes.NewReader(data))
+		img, err := webp.Decode(bytes.NewReader(data), webp.Options{AutoRotate: true})
 		if err != nil {
 			return nil
 		}
@@ -469,6 +469,7 @@ func (a *app) start() {
 		return
 	}
 	opts := a.options()
+	settings := a.outputSettings()
 	queue := slices.Clone(a.files)
 	a.running, a.done, a.total = true, 0, len(queue)
 	a.runDone = make(chan struct{})
@@ -478,20 +479,22 @@ func (a *app) start() {
 	a.progress(0.01)
 	runDone := a.runDone
 	go func() {
+		inputs := make([]string, len(queue))
+		for i, f := range queue {
+			inputs[i] = f.path
+		}
+		plans, planErr := output.Plan(inputs, opts.Format, settings.destFor, settings.overwrite)
 		var ok, failed int
 		var totIn, totOut int64
 		for i, f := range queue {
 			a.update(func() { f.status = stWorking })
-			res, err := imgopter.OptimizeFile(f.path, opts)
-			var dest string
+			var res *imgopter.Result
+			err := planErr
 			if err == nil {
-				dest, err = a.destFor(f, res)
+				res, err = imgopter.OptimizeFile(f.path, opts)
 			}
 			if err == nil {
-				err = os.MkdirAll(filepath.Dir(dest), 0o755)
-			}
-			if err == nil {
-				err = os.WriteFile(dest, res.Data, 0o644)
+				err = output.WriteFile(plans[i].Dest, res.Data)
 			}
 			st, errStr := stDone, ""
 			var outSize int64
@@ -530,24 +533,27 @@ func (a *app) start() {
 	}()
 }
 
-// destFor resolves where f's optimized form is written: f's own path when
-// overwriting, else outDir-or-source-dir / stem + suffix + resolved ext.
-func (a *app) destFor(f *fileItem, res *imgopter.Result) (string, error) {
-	if a.overwrite {
-		return f.path, nil
+// outputSettings captures destination controls for one run.
+type outputSettings struct {
+	dir, suffix string
+	overwrite   bool
+}
+
+func (a *app) outputSettings() outputSettings {
+	return outputSettings{dir: a.outDir, suffix: a.suffix, overwrite: a.overwrite}
+}
+
+func (o outputSettings) destFor(path string, format imgopter.Format) string {
+	if o.overwrite {
+		return path
 	}
-	dir := a.outDir
+	dir := o.dir
 	if dir == "" {
-		dir = filepath.Dir(f.path)
+		dir = filepath.Dir(path)
 	}
-	stem := strings.TrimSuffix(f.name, filepath.Ext(f.name))
-	dest := filepath.Join(dir, stem+a.suffix+res.Format.Ext())
-	inAbs, err1 := filepath.Abs(f.path)
-	destAbs, err2 := filepath.Abs(dest)
-	if err1 == nil && err2 == nil && inAbs == destAbs {
-		return "", fmt.Errorf("%s would overwrite the source; check Overwrite or pick a suffix", f.name)
-	}
-	return dest, nil
+	name := filepath.Base(path)
+	stem := strings.TrimSuffix(name, filepath.Ext(name))
+	return filepath.Join(dir, stem+o.suffix+format.Ext())
 }
 
 // humanBytes formats a size as the CLI does.

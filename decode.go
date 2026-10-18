@@ -37,7 +37,7 @@ func decodeImage(src []byte, sniffed Format) (image.Image, error) {
 	// image.Decode doesn't know WebP, so handle it before the generic path.
 	// Everything else goes through imaging for EXIF auto-orientation.
 	if sniffed == FormatWebP {
-		img, err := webp.Decode(bytes.NewReader(src))
+		img, err := webp.Decode(bytes.NewReader(src), webp.Options{AutoRotate: true})
 		if err != nil {
 			return nil, fmt.Errorf("imgopter: decode webp: %w", err)
 		}
