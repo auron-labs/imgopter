@@ -4,6 +4,8 @@ Make images smaller, resize photos, and convert between formats with a desktop a
 
 imgopter reads JPEG, PNG, WebP, GIF, BMP, and TIFF. It saves JPEG, PNG, and WebP, keeping your originals by default.
 
+![imgopter desktop app with quality, resize, format, and output controls beside the image drop area](assets/screenshot.png)
+
 ## Get started
 
 You'll need Go 1.27.1 or newer. Run these commands from the project directory.
