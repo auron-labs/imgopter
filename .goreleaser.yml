@@ -29,7 +29,9 @@ checksum:
     - glob: build/desktop/*
 
 release:
+  # Keep uploads in release-please's draft until every asset is uploaded.
   use_existing_draft: true
+  replace_existing_artifacts: true
   preflight:
     fail_on_error: true
   extra_files:

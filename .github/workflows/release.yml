@@ -48,7 +48,8 @@ jobs:
           pattern: desktop-*
           path: build/desktop
           merge-multiple: true
-      - uses: goreleaser/goreleaser-action@v6
+      - name: Upload all assets, then publish the draft
+        uses: goreleaser/goreleaser-action@v6
         with:
           version: v2.18.2
           args: release --clean
@@ -72,7 +73,7 @@ jobs:
             assets: build/darwin-universal/*.dmg
           - runner: windows-latest
             platform: windows/amd64
-            assets: build/windows-amd64/*Setup*.exe
+            assets: build/windows-amd64/*-setup-*.exe
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -88,6 +89,17 @@ jobs:
         env:
           PLATFORM: ${{ matrix.platform }}
         run: go tool mygo build -platform "$PLATFORM"
+      - name: Verify every desktop package exists
+        shell: bash
+        env:
+          ASSET_PATTERNS: ${{ matrix.assets }}
+        run: |
+          while IFS= read -r pattern; do
+            if [[ -n "$pattern" ]] && ! compgen -G "$pattern" > /dev/null; then
+              printf '::error::Missing desktop package: %s\n' "$pattern"
+              exit 1
+            fi
+          done <<< "$ASSET_PATTERNS"
       - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.runner }}
