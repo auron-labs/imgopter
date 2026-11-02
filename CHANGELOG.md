@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/auron-labs/imgopter/compare/v0.2.1...v0.3.0) (2026-11-02)
+
+
+### Features
+
+* upgrade native desktop UI to MyGo v0.7.4 ([911f1c0](https://github.com/auron-labs/imgopter/commit/911f1c0044a0b021cc2878fca808d08d54d3924d))
+
+
+### Bug Fixes
+
+* verify release packages before publishing ([e7678ac](https://github.com/auron-labs/imgopter/commit/e7678ac9d64eb56bc7c0528fb8754f16d750513f))
+
 ## [0.2.1](https://github.com/auron-labs/imgopter/compare/v0.2.0...v0.2.1) (2026-10-18)
 
 
