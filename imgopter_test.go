@@ -2,11 +2,13 @@ package imgopter
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/color"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -18,8 +20,8 @@ func gradient(w, h int) *image.RGBA {
 	for y := range h {
 		for x := range w {
 			img.SetRGBA(x, y, color.RGBA{
-				uint8(x * 255 / max(1, w)),
-				uint8(y * 255 / max(1, h)),
+				uint8(x * 255 / max(1, w)), // #nosec G115 -- x is in [0, w), so the scaled value fits in a byte.
+				uint8(y * 255 / max(1, h)), // #nosec G115 -- y is in [0, h), so the scaled value fits in a byte.
 				128, 255,
 			})
 		}
@@ -29,13 +31,13 @@ func gradient(w, h int) *image.RGBA {
 
 func noise(w, h int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	rnd := rand.New(rand.NewSource(42))
+	rnd := rand.New(rand.NewSource(42)) // #nosec G404 -- Reproducible image noise is a test fixture, not a secret.
 	for y := range h {
 		for x := range w {
 			img.SetRGBA(x, y, color.RGBA{
-				uint8(rnd.Intn(256)),
-				uint8(rnd.Intn(256)),
-				uint8(rnd.Intn(256)),
+				uint8(rnd.Intn(256)), // #nosec G115 -- Intn(256) is in [0, 255].
+				uint8(rnd.Intn(256)), // #nosec G115 -- Intn(256) is in [0, 255].
+				uint8(rnd.Intn(256)), // #nosec G115 -- Intn(256) is in [0, 255].
 				255,
 			})
 		}
@@ -390,7 +392,7 @@ func TestOptimizeFile(t *testing.T) {
 	dir := t.TempDir()
 	src := encodePNG(t, gradient(120, 90))
 	path := filepath.Join(dir, "in.png")
-	if err := os.WriteFile(path, src, 0o644); err != nil {
+	if err := os.WriteFile(path, src, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	res, err := OptimizeFile(path, Options{Quality: 100, Format: FormatAuto})
@@ -402,6 +404,30 @@ func TestOptimizeFile(t *testing.T) {
 	}
 	if res.Format != FormatPNG || res.Width != 120 || res.Height != 90 {
 		t.Fatalf("format=%v dims=%dx%d", res.Format, res.Width, res.Height)
+	}
+}
+
+func TestOptimizeFilePreservesReadError(t *testing.T) {
+	_, err := OptimizeFile(filepath.Join(t.TempDir(), "missing.png"), Options{})
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("read error lost its cause: %v", err)
+	}
+}
+
+func TestJPEGAndPNGPreserveWriteError(t *testing.T) {
+	for _, format := range []Format{FormatJPEG, FormatPNG} {
+		t.Run(format.String(), func(t *testing.T) {
+			failure := errors.New("disk full")
+			reader, writer := io.Pipe()
+			if err := reader.CloseWithError(failure); err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = writer.Close() }()
+			err := encodeImage(writer, gradient(8, 8), format, 100)
+			if !errors.Is(err, failure) {
+				t.Fatalf("encode error lost its cause: %v", err)
+			}
+		})
 	}
 }
 

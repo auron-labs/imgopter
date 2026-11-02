@@ -19,6 +19,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/gen2brain/webp"
+	"github.com/oneo-me/onevra/source/components"
+	"github.com/oneo-me/onevra/source/theme"
 )
 
 // File row states.
@@ -86,8 +88,10 @@ func main() {
 			Width: 920, Height: 600,
 			MinWidth: 680, MinHeight: 420,
 			StateKey: "main",
+			Hidden:   true,
 			Content:  ui.View(a.view),
 		})
+		a.win.OnReadyToShow(a.win.Show)
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
@@ -136,6 +140,7 @@ func (a *app) progress(v float64) {
 }
 
 func (a *app) view(c *ui.Context) {
+	theme.Apply(c)
 	a.svc = c.Services()
 	t := c.Theme()
 	if a.note != "" {
@@ -145,14 +150,14 @@ func (a *app) view(c *ui.Context) {
 	ui.Column(c).Fill().Children(func() {
 		ui.Row(c).Padding(10, 14).Gap(8).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
-			if ui.PrimaryButton(c, "Add images…").Clicked() {
+			if components.Button(c, "Add images…", components.ButtonPrimary).Clicked() {
 				a.pick(false)
 			}
-			if ui.Button(c, "Add folder…").Clicked() {
+			if components.Button(c, "Add folder…", components.ButtonOutline).Clicked() {
 				a.pick(true)
 			}
 			ui.Spacer(c)
-			if ui.Button(c, "Clear list").Disabled(a.running || len(a.files) == 0).Clicked() {
+			if components.Button(c, "Clear list", components.ButtonOutline).Disabled(a.running || len(a.files) == 0).Clicked() {
 				a.files = nil
 				a.have = nil
 			}
@@ -170,46 +175,52 @@ func (a *app) controls(c *ui.Context) {
 	t := c.Theme()
 	ui.Scroll(c).Width(296).Shrink(0).Padding(16).Gap(16).
 		BorderWidth(0, 1, 0, 0).BorderColor(t.Border).Children(func() {
-		ui.Text(c, "Settings").Bold()
+		components.Text(c, "Settings").Bold()
 		ui.Field(c, fmt.Sprintf("Quality — %d", int(math.Round(a.quality))), func() {
-			ui.Slider(c, &a.quality, 1, 100).Step(1)
+			components.Slider(c, &a.quality, 1, 100, components.SliderOptions{Step: 1}).Label("Quality")
 		})
 		ui.Field(c, "Max width (0 = any)", func() {
-			ui.NumberInput(c, &a.maxW, 0, 100000, 50)
+			components.NumberInput(c, &a.maxW, 0, 100000, 50).Label("Max width (0 = any)").FillWidth()
 		})
 		ui.Field(c, "Max height (0 = any)", func() {
-			ui.NumberInput(c, &a.maxH, 0, 100000, 50)
+			components.NumberInput(c, &a.maxH, 0, 100000, 50).Label("Max height (0 = any)").FillWidth()
 		})
 		ui.Field(c, "Resize mode", func() {
-			ui.Segmented(c, &a.modeIdx, "Fit", "Crop")
+			components.Tabs(c, &a.modeIdx, components.TabsSegmented, "Fit", "Crop")
 		})
 		ui.Field(c, "Format", func() {
-			ui.Select(c, &a.format, formats).Disabled(a.overwrite)
+			sel := components.Select(c, &a.format)
+			sel.Trigger.Disabled(a.overwrite).Children(func() { components.Text(c, a.format) })
+			sel.Popup(func(_ ui.Element) {
+				for _, format := range formats {
+					sel.Item(format).Children(func() { components.Text(c, format) })
+				}
+			})
 		})
 		ui.Divider(c)
-		ui.Text(c, "Output").Bold()
+		components.Text(c, "Output").Bold()
 		ui.Field(c, "Folder (empty = source)", func() {
 			ui.Row(c).Gap(8).Children(func() {
-				ui.TextInput(c, &a.outDir).Grow(1).MinWidth(0).
+				components.TextBox(c, &a.outDir, components.TextBoxOptions{}).Grow(1).MinWidth(0).
 					Placeholder("Same folder").Disabled(a.overwrite)
-				if ui.Button(c, "Browse…").Disabled(a.overwrite).Clicked() {
+				if components.Button(c, "Browse…", components.ButtonOutline).Disabled(a.overwrite).Clicked() {
 					a.pickOutDir()
 				}
 			})
 		})
 		ui.Field(c, "Filename suffix", func() {
-			ui.TextInput(c, &a.suffix).Disabled(a.overwrite)
+			components.TextBox(c, &a.suffix, components.TextBoxOptions{}).Disabled(a.overwrite)
 		})
-		ui.Checkbox(c, &a.overwrite, "Overwrite originals")
+		components.Checkbox(c, &a.overwrite, "Overwrite originals")
 		ui.Divider(c)
-		if ui.PrimaryButton(c, "Optimize").Disabled(a.running || len(a.files) == 0).Clicked() {
-			a.start()
+		if components.Button(c, "Optimize", components.ButtonPrimary).Disabled(a.running || len(a.files) == 0).Clicked() {
+			a.requestStart(mygo.Dialog.Message)
 		}
 		if a.running {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Progress(c, float64(a.done)/float64(max(a.total, 1))).Grow(1)
-				ui.Spinner(c)
-				ui.Textf(c, "%d/%d", a.done, a.total).FontSize(12).TextColor(t.TextMuted)
+				components.Progress(c, float64(a.done)/float64(max(a.total, 1))).Grow(1)
+				components.Spinner(c, components.SpinnerSpokes).Label("Optimizing")
+				components.Text(c, fmt.Sprintf("%d/%d", a.done, a.total)).FontSize(12).TextColor(t.TextMuted)
 			})
 		}
 	})
@@ -232,8 +243,8 @@ func (a *app) fileArea(c *ui.Context) {
 				zone.Border(2, t.Accent)
 			}
 			zone.Children(func() {
-				ui.Text(c, "Drop images here").FontSize(16).Bold()
-				ui.Text(c, "or click to browse").TextColor(t.TextMuted)
+				components.Text(c, "Drop images here").FontSize(16).Bold()
+				components.Text(c, "or click to browse").TextColor(t.TextMuted)
 			})
 			if zone.Clicked() {
 				a.pick(false)
@@ -258,15 +269,15 @@ func (a *app) fileArea(c *ui.Context) {
 					ui.Box(c).Size(44, 44).Radius(6).Background(t.Surface).Border(1, t.Border).Shrink(0)
 				}
 				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					ui.Text(c, f.name).SingleLine()
+					components.Text(c, f.name).SingleLine()
 					sub := humanBytes(f.inSize)
 					if f.origW > 0 {
 						sub = fmt.Sprintf("%d×%d · %s", f.origW, f.origH, humanBytes(f.inSize))
 					}
-					ui.Text(c, sub).FontSize(12).TextColor(t.TextMuted).SingleLine()
+					components.Text(c, sub).FontSize(12).TextColor(t.TextMuted).SingleLine()
 				})
 				a.rowStatus(c, f)
-				if ui.Button(c, "✕").Disabled(a.running).Tooltip("Remove from list").Clicked() {
+				if components.Button(c, "✕", components.ButtonOutline).Label("Remove " + f.name).Disabled(a.running).Tooltip("Remove from list").Clicked() {
 					remove = i
 				}
 			})
@@ -286,7 +297,7 @@ func (a *app) rowStatus(c *ui.Context, f *fileItem) {
 	t := c.Theme()
 	switch f.status {
 	case stWorking:
-		ui.Spinner(c).Shrink(0)
+		components.Spinner(c, components.SpinnerSpokes).Label("Optimizing " + f.name).Shrink(0)
 	case stDone:
 		pct := 0.0
 		if f.inSize > 0 {
@@ -296,12 +307,12 @@ func (a *app) rowStatus(c *ui.Context, f *fileItem) {
 		if pct < 0 {
 			col = t.Warning
 		}
-		ui.Textf(c, "→ %s (−%.0f%%)", humanBytes(f.outSize), pct).
+		components.Text(c, fmt.Sprintf("→ %s (−%.0f%%)", humanBytes(f.outSize), pct)).
 			FontSize(12).TextColor(col).SingleLine()
 	case stFailed:
-		ui.Text(c, "failed").FontSize(12).TextColor(t.Danger).Tooltip(f.err)
+		components.Text(c, "failed").FontSize(12).TextColor(t.Danger).Tooltip(f.err)
 	default:
-		ui.Text(c, "pending").FontSize(12).TextColor(t.TextMuted)
+		components.Text(c, "pending").FontSize(12).TextColor(t.TextMuted)
 	}
 }
 
@@ -321,18 +332,18 @@ func (a *app) statusBar(c *ui.Context) {
 		if len(a.files) == 1 {
 			label = "1 file · " + humanBytes(in)
 		}
-		ui.Text(c, label).FontSize(12).TextColor(t.TextMuted)
+		components.Text(c, label).FontSize(12).TextColor(t.TextMuted)
 		if out > 0 {
 			pct := (1 - float64(out)/float64(in)) * 100
-			ui.Textf(c, "→ %s (−%.0f%%)", humanBytes(out), pct).
+			components.Text(c, fmt.Sprintf("→ %s (−%.0f%%)", humanBytes(out), pct)).
 				FontSize(12).TextColor(t.Success)
 		}
 		ui.Spacer(c)
 		if a.running {
-			ui.Textf(c, "Optimizing %d/%d…", a.done, a.total).
+			components.Text(c, fmt.Sprintf("Optimizing %d/%d…", a.done, a.total)).
 				FontSize(12).TextColor(t.TextMuted)
 		} else if a.lastNote != "" {
-			ui.Text(c, a.lastNote).FontSize(12).TextColor(t.TextMuted)
+			components.Text(c, a.lastNote).FontSize(12).TextColor(t.TextMuted)
 		}
 	})
 }
@@ -445,7 +456,7 @@ func (a *app) load(paths []string) {
 // decodeImage reads and decodes path, orienting JPEGs as their EXIF says.
 // WebP goes first: image.Decode does not know it.
 func decodeImage(path string) image.Image {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- This is an image explicitly selected by the desktop user.
 	if err != nil {
 		return nil
 	}
@@ -461,6 +472,34 @@ func decodeImage(path string) image.Image {
 		return nil
 	}
 	return img
+}
+
+// requestStart confirms destructive runs before handing the queue to the worker.
+func (a *app) requestStart(message func(mygo.MessageOptions) (mygo.MessageResult, error)) {
+	if a.running || len(a.files) == 0 {
+		return
+	}
+	if a.overwrite {
+		result, err := message(mygo.MessageOptions{
+			Parent:             a.win,
+			Type:               mygo.MessageWarning,
+			Title:              "Overwrite originals?",
+			Message:            "Replace the queued original images with optimized versions?",
+			Detail:             "This cannot be undone. Keep a backup of images you want to preserve.",
+			Buttons:            []string{"Cancel", "Overwrite originals"},
+			DefaultButton:      0,
+			CancelButton:       0,
+			DestructiveButtons: []int{1},
+		})
+		if err != nil {
+			a.note = "Could not confirm overwrite: " + err.Error()
+			return
+		}
+		if result.Button != 1 {
+			return
+		}
+	}
+	a.start()
 }
 
 // start runs the queue sequentially off the main thread.

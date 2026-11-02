@@ -33,7 +33,7 @@ func Plan(inputs []string, format imgopter.Format, destination func(string, imgo
 		}
 		infos[i], err = os.Stat(sources[i])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("stat source %s: %w", src, err)
 		}
 		if !infos[i].Mode().IsRegular() {
 			return nil, fmt.Errorf("%s is not a regular file", src)
@@ -54,18 +54,18 @@ func Plan(inputs []string, format imgopter.Format, destination func(string, imgo
 	for i, job := range jobs {
 		destInfo, err := os.Stat(job.Dest)
 		if err != nil && !os.IsNotExist(err) {
-			return nil, err
+			return nil, fmt.Errorf("stat output %s: %w", job.Dest, err)
 		}
 		for j, src := range sources {
 			same := job.Dest == src || (destInfo != nil && os.SameFile(destInfo, infos[j]))
 			if same && (!overwrite || i != j) {
-				return nil, fmt.Errorf("output %s would overwrite input %s", job.Dest, inputs[j])
+				return nil, fmt.Errorf("output %s would overwrite input %s", job.Dest, jobs[j].Source)
 			}
 		}
 		for j := range i {
 			otherInfo, err := os.Stat(jobs[j].Dest)
 			if err != nil && !os.IsNotExist(err) {
-				return nil, err
+				return nil, fmt.Errorf("stat output %s: %w", jobs[j].Dest, err)
 			}
 			if job.Dest == jobs[j].Dest || (destInfo != nil && otherInfo != nil && os.SameFile(destInfo, otherInfo)) {
 				return nil, fmt.Errorf("inputs %s and %s share output %s", inputs[j], job.Source, job.Dest)
@@ -76,15 +76,15 @@ func Plan(inputs []string, format imgopter.Format, destination func(string, imgo
 }
 
 func inputFormat(path string) (imgopter.Format, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- This is a caller-selected source image.
 	if err != nil {
-		return imgopter.FormatAuto, err
+		return imgopter.FormatAuto, fmt.Errorf("open image %s: %w", path, err)
 	}
 	defer func() { _ = f.Close() }()
 	var header [512]byte
 	n, err := io.ReadFull(f, header[:])
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		return imgopter.FormatAuto, err
+		return imgopter.FormatAuto, fmt.Errorf("read image header %s: %w", path, err)
 	}
 	format := imgopter.SniffFormat(header[:n])
 	if format == imgopter.FormatAuto {
@@ -97,22 +97,22 @@ func inputFormat(path string) (imgopter.Format, error) {
 func resolve(path string) (string, error) {
 	path, err := filepath.Abs(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
 	resolved, err := filepath.EvalSymlinks(path)
 	if err == nil {
 		return resolved, nil
 	}
 	if !os.IsNotExist(err) {
-		return "", err
+		return "", fmt.Errorf("resolve symlinks %s: %w", path, err)
 	}
 	// A dangling symlink is not a safe new destination.
 	if _, statErr := os.Lstat(path); statErr == nil {
-		return "", err
+		return "", fmt.Errorf("resolve existing path %s: %w", path, err)
 	}
 	parent := filepath.Dir(path)
 	if parent == path {
-		return "", err
+		return "", fmt.Errorf("resolve root %s: %w", path, err)
 	}
 	parent, err = resolve(parent)
 	if err != nil {
@@ -127,19 +127,22 @@ func resolve(path string) (string, error) {
 func WriteFile(path string, data []byte) error {
 	return writeAtomic(path, func(w io.Writer) error {
 		_, err := io.Copy(w, bytes.NewReader(data))
-		return err
+		if err != nil {
+			return fmt.Errorf("write image data: %w", err)
+		}
+		return nil
 	})
 }
 
 func writeAtomic(path string, write func(io.Writer) error) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- Output directories use conventional permissions, restricted by the user's umask.
+		return fmt.Errorf("create output directory %s: %w", dir, err)
 	}
 	mode := os.FileMode(0o644)
 	info, err := os.Stat(path)
 	if err != nil && !os.IsNotExist(err) {
-		return err
+		return fmt.Errorf("stat output %s: %w", path, err)
 	}
 	if info != nil {
 		if !info.Mode().IsRegular() {
@@ -150,9 +153,9 @@ func writeAtomic(path string, write func(io.Writer) error) error {
 	// O_EXCL and a random name create a staging file without following links.
 	// Creation honors the umask for new outputs.
 	temp := filepath.Join(dir, ".imgopter-"+rand.Text())
-	f, err := os.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	f, err := os.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode) // #nosec G304 -- The staging file is created exclusively in the caller-selected output directory.
 	if err != nil {
-		return err
+		return fmt.Errorf("create staging file %s: %w", temp, err)
 	}
 	defer func() { _ = os.Remove(temp) }()
 	defer func() { _ = f.Close() }()
@@ -161,14 +164,17 @@ func writeAtomic(path string, write func(io.Writer) error) error {
 	}
 	if info != nil {
 		if err := f.Chmod(mode); err != nil {
-			return err
+			return fmt.Errorf("preserve output permissions %s: %w", path, err)
 		}
 	}
 	if err := f.Sync(); err != nil {
-		return err
+		return fmt.Errorf("sync staging file %s: %w", temp, err)
 	}
 	if err := f.Close(); err != nil {
-		return err
+		return fmt.Errorf("close staging file %s: %w", temp, err)
 	}
-	return os.Rename(temp, path)
+	if err := os.Rename(temp, path); err != nil {
+		return fmt.Errorf("replace output %s: %w", path, err)
+	}
+	return nil
 }

@@ -15,12 +15,12 @@ Download the installer for your platform from the [latest release](https://githu
 | Platform | Download | Install |
 | --- | --- | --- |
 | macOS (Intel or Apple silicon) | `.dmg` | Open it and drag imgopter to Applications |
-| Windows (x64) | `imgopter Setup … .exe` | Run the installer |
+| Windows (x64) | `imgopter-setup-<version>-amd64.exe` | Run the installer |
 | Linux (x64) | `.deb` or `imgopter-…-linux-amd64.tar.gz` | Install the Debian package, or extract the archive and run `./imgopter` |
 
 Open imgopter, click **Add images…** or **Add folder…**, adjust the settings, and click **Optimize**. Results are saved beside the originals with `-opt` added to the filename, unless you choose an output folder.
 
-On Linux, the desktop app needs GTK 3 and WebKitGTK installed.
+On Linux, the native desktop app needs GTK 3 installed.
 
 ### Command line
 
@@ -32,7 +32,7 @@ bin install github.com/auron-labs/imgopter
 
 For a manual install, download `imgopter_<version>_<os>_<arch>.tar.gz` (or `.zip` on Windows) from the [latest release](https://github.com/auron-labs/imgopter/releases/latest). Choose `darwin` for macOS, `linux` for Linux, or `windows` for Windows, and `arm64` or `amd64` for your processor. Extract it and put `imgopter` (`imgopter.exe` on Windows) in a directory on your `PATH`.
 
-CLI archives use underscores in their names; desktop packages use spaces or hyphens. If bin asks you to choose an asset, select the CLI archive.
+CLI archives use underscores in their names; desktop archives use hyphens. If bin asks you to choose an asset, select the CLI archive.
 
 Try it:
 
@@ -101,7 +101,7 @@ Run `imgopter --help` for all options, including output naming and parallel work
 
 ## What happens to your images
 
-Originals stay in place unless you choose **Overwrite originals** in the app or pass `--overwrite` to the CLI. Back them up before using that option. To convert GIF, BMP, or TIFF, save a separate output instead of overwriting the input.
+Originals stay in place unless you choose **Overwrite originals** in the app or pass `--overwrite` to the CLI. The desktop app asks for confirmation before each overwrite run, with **Cancel** selected by default. Back up originals before using that option. To convert GIF, BMP, or TIFF, save a separate output instead of overwriting the input.
 
 Re-encoding removes metadata, including EXIF, color profiles, and comments. Animated images become a single frame. These changes also apply at quality 100.
 
@@ -109,7 +109,7 @@ Some images get larger after re-encoding. imgopter shows the size change and sav
 
 ## Development
 
-To build from source, use Go 1.27.1 or newer:
+To build from source, use Go 1.27.3 or newer:
 
 ```sh
 go build -o build/imgopter ./cmd/imgopter

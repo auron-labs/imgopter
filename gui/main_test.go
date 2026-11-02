@@ -2,15 +2,18 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
 	"imgopter"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -71,6 +74,52 @@ func TestOptionsMapping(t *testing.T) {
 	}
 }
 
+func TestSettingsControls(t *testing.T) {
+	for _, dark := range []bool{false, true} {
+		a := newTestApp()
+		tt := ui.NewTester(a.view, 920, 900)
+		tt.SetDark(dark)
+		for _, label := range []string{"Crop", "Auto", "WebP", "Filename suffix"} {
+			if err := tt.Click(label); err != nil {
+				t.Fatal(err)
+			}
+		}
+		tt.Key(ui.Ctrl, ui.KeyA)
+		tt.Type("-small")
+		if a.modeIdx != 1 || a.format != "WebP" || a.suffix != "-small" {
+			t.Fatalf("settings did not retain edits: mode=%d, format=%q, suffix=%q", a.modeIdx, a.format, a.suffix)
+		}
+		if err := tt.Click("Overwrite originals"); err != nil {
+			t.Fatal(err)
+		}
+		if !a.overwrite {
+			t.Fatal("overwrite checkbox did not update")
+		}
+		if err := tt.Click("WebP"); err != nil {
+			t.Fatal(err)
+		}
+		if tt.HasText("JPEG") {
+			t.Fatal("disabled format selector opened")
+		}
+		if err := tt.Click("Filename suffix"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Key(ui.Ctrl, ui.KeyA)
+		tt.Type("-changed")
+		if a.suffix != "-small" {
+			t.Fatal("disabled suffix accepted input")
+		}
+		tt.SetSize(680, 420)
+		tt.Scroll(100, 300, 0, 800)
+		if err := tt.Click("Overwrite originals"); err != nil {
+			t.Fatal(err)
+		}
+		if a.overwrite {
+			t.Fatal("settings cannot be reached after scrolling at minimum window size")
+		}
+	}
+}
+
 func TestDestFor(t *testing.T) {
 	a := newTestApp()
 	path := "/pics/pic.jpg"
@@ -118,9 +167,9 @@ func TestLoadDedupesAndThumbs(t *testing.T) {
 	for i := range img.Pix {
 		img.Pix[i] = 200 // flat color is fine for a thumbnail
 	}
-	img.Pix[0] = uint8(color.RGBA{R: 255}.R)
+	img.Pix[0] = color.RGBA{R: 255}.R
 	p := filepath.Join(dir, "shot.png")
-	f, err := os.Create(p)
+	f, err := os.Create(p) // #nosec G304 -- p is a fixture inside t.TempDir.
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +202,7 @@ func TestOptimizeRun(t *testing.T) {
 		img.Pix[i] = uint8(i * 7)
 	}
 	src := filepath.Join(dir, "big.png")
-	f, err := os.Create(src)
+	f, err := os.Create(src) // #nosec G304 -- src is a fixture inside t.TempDir.
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,6 +245,94 @@ func waitForRun(t *testing.T, a *app) {
 	}
 }
 
+func TestRequestStart(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		overwrite bool
+		button    int
+		err       error
+		wantRun   bool
+	}{
+		{name: "copies need no confirmation", wantRun: true},
+		{name: "cancel", overwrite: true},
+		{name: "dismiss", overwrite: true, button: -1},
+		{name: "dialog failure", overwrite: true, button: 1, err: errors.New("dialog unavailable")},
+		{name: "confirm", overwrite: true, button: 1, wantRun: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := filepath.Join(t.TempDir(), "original.png")
+			var original bytes.Buffer
+			if err := png.Encode(&original, image.NewNRGBA(image.Rect(0, 0, 8, 8))); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(src, original.Bytes(), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			a := newTestApp()
+			a.load([]string{src})
+			a.overwrite, a.maxW = tc.overwrite, 4
+			a.format = "JPEG" // Overwrite must still preserve the original codec.
+			calls := 0
+			a.requestStart(func(opts mygo.MessageOptions) (mygo.MessageResult, error) {
+				calls++
+				if !tc.overwrite {
+					t.Fatal("copying asked for overwrite confirmation")
+				}
+				if !slices.Equal(opts.Buttons, []string{"Cancel", "Overwrite originals"}) ||
+					opts.DefaultButton != 0 || opts.CancelButton != 0 ||
+					!slices.Equal(opts.DestructiveButtons, []int{1}) {
+					t.Fatalf("unsafe confirmation: %+v", opts)
+				}
+				return mygo.MessageResult{Button: tc.button}, tc.err
+			})
+			if tc.overwrite && calls != 1 {
+				t.Fatalf("confirmation calls = %d", calls)
+			}
+			if (a.runDone != nil) != tc.wantRun {
+				t.Fatalf("run started = %v, want %v", a.runDone != nil, tc.wantRun)
+			}
+			if tc.wantRun {
+				waitForRun(t, a)
+				if f := a.files[0]; f.status != stDone || f.outW != 4 {
+					t.Fatalf("unexpected result: %+v", f)
+				}
+			}
+			if tc.err != nil && a.note == "" {
+				t.Fatal("dialog failure was not reported")
+			}
+			data, err := os.ReadFile(src) // #nosec G304 -- src is a fixture inside t.TempDir.
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.overwrite && tc.wantRun {
+				img, err := png.Decode(bytes.NewReader(data))
+				if err != nil || img.Bounds().Dx() != 4 {
+					t.Fatalf("original was not resized as PNG: %v", err)
+				}
+			} else if !bytes.Equal(data, original.Bytes()) {
+				t.Fatal("original changed without overwrite confirmation")
+			}
+		})
+	}
+}
+
+func TestRequestStartIgnoresEmptyOrRunningQueue(t *testing.T) {
+	for _, running := range []bool{false, true} {
+		a := newTestApp()
+		a.overwrite, a.running = true, running
+		if running {
+			a.files = []*fileItem{{path: "/in/a.png"}}
+		}
+		a.requestStart(func(mygo.MessageOptions) (mygo.MessageResult, error) {
+			t.Fatal("inactive Optimize action opened a dialog")
+			return mygo.MessageResult{}, nil
+		})
+		if a.runDone != nil {
+			t.Fatal("inactive Optimize action started a run")
+		}
+	}
+}
+
 func TestRunSnapshotsOutputSettings(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "original.png")
@@ -218,11 +355,11 @@ func TestRunSnapshotsOutputSettings(t *testing.T) {
 	if a.files[0].status != stDone {
 		t.Fatal(a.files[0].err)
 	}
-	original, err := os.ReadFile(src)
+	original, err := os.ReadFile(src) // #nosec G304 -- src is a fixture inside t.TempDir.
 	if err != nil || !bytes.Equal(original, b.Bytes()) {
 		t.Fatalf("source changed: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "original-opt.jpg"))
+	data, err := os.ReadFile(filepath.Join(dir, "original-opt.jpg")) // #nosec G304 -- dir is t.TempDir.
 	if err != nil {
 		t.Fatal(err)
 	}

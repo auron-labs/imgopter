@@ -19,20 +19,20 @@ import (
 func TestRenderShot(t *testing.T) {
 	dir := t.TempDir()
 	a := &app{quality: 80, format: formats[0], suffix: "-opt", maxW: 1200}
-	r := rand.New(rand.NewSource(2))
+	r := rand.New(rand.NewSource(2)) // #nosec G404 -- Reproducible image noise is a test fixture, not a secret.
 	for i, name := range []string{"beach.jpg", "screenshot.png", "product.webp"} {
 		m := image.NewRGBA(image.Rect(0, 0, 400+100*i, 300+80*i))
-		for y := 0; y < m.Bounds().Dy(); y++ {
-			for x := 0; x < m.Bounds().Dx(); x++ {
+		for y := range m.Bounds().Dy() {
+			for x := range m.Bounds().Dx() {
 				m.Set(x, y, color.RGBA{
-					uint8(x%255) + uint8(r.Intn(20)),
+					uint8(x%255) + uint8(r.Intn(20)), // #nosec G115 -- Both converted terms fit in a byte; color addition intentionally wraps.
 					uint8(math.Sin(float64(y)/50) * 100),
 					uint8(y % 255), 255,
 				})
 			}
 		}
 		p := filepath.Join(dir, name)
-		f, err := os.Create(p)
+		f, err := os.Create(p) // #nosec G304 -- p is a fixture inside t.TempDir.
 		if err != nil {
 			t.Fatal(err)
 		}

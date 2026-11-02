@@ -7,6 +7,7 @@ import (
 	"imgopter"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -28,7 +29,7 @@ func writePNG(t *testing.T, path string, w int) []byte {
 func TestProcessRejectsCollisionsBeforeWriting(t *testing.T) {
 	for _, kind := range []string{"other input", "shared output"} {
 		for _, jobs := range []int{1, 4} {
-			t.Run(kind+string(rune('0'+jobs)), func(t *testing.T) {
+			t.Run(kind+strconv.Itoa(jobs), func(t *testing.T) {
 				dir := t.TempDir()
 				a, b := filepath.Join(dir, "a.png"), filepath.Join(dir, "a-opt.png")
 				out := ""
@@ -44,7 +45,7 @@ func TestProcessRejectsCollisionsBeforeWriting(t *testing.T) {
 					}
 				}
 				for path, want := range originals {
-					got, err := os.ReadFile(path)
+					got, err := os.ReadFile(path) // #nosec G304 -- path is a fixture inside t.TempDir.
 					if err != nil || !bytes.Equal(got, want) {
 						t.Fatalf("source %s modified: %v", path, err)
 					}

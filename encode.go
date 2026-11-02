@@ -15,21 +15,29 @@ import (
 )
 
 func encodeImage(w io.Writer, img image.Image, f Format, quality int) error {
+	var err error
 	switch f {
 	case FormatJPEG:
 		// JPEG has no alpha; flatten onto opaque white first or transparent
 		// regions come out black.
-		return jpeg.Encode(w, flatten(img), &jpeg.Options{Quality: quality})
+		err = jpeg.Encode(w, flatten(img), &jpeg.Options{Quality: quality})
 	case FormatPNG:
 		if quality < 100 {
 			img = palettize(img, quality)
 		}
 		enc := png.Encoder{CompressionLevel: png.BestCompression}
-		return enc.Encode(w, img)
+		err = enc.Encode(w, img)
 	case FormatWebP:
-		return webp.Encode(w, img, webp.Options{Quality: quality, Method: 4})
+		err = webp.Encode(w, img, webp.Options{Quality: quality, Method: 4})
+	case FormatAuto:
+		fallthrough
+	default:
+		return fmt.Errorf("imgopter: no encoder for format %d", int(f))
 	}
-	return fmt.Errorf("imgopter: no encoder for format %d", int(f))
+	if err != nil {
+		return fmt.Errorf("imgopter: encode %s: %w", f, err)
+	}
+	return nil
 }
 
 // flatten composites img over an opaque white background.

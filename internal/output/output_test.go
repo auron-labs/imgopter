@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"imgopter"
 	"io"
 	"os"
@@ -12,7 +13,7 @@ import (
 
 func put(t *testing.T, path string, data []byte) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
@@ -70,7 +71,7 @@ func TestPlanProtectsInputsAndDestinations(t *testing.T) {
 			if err == nil {
 				t.Fatal("unsafe plan accepted")
 			}
-			data, err := os.ReadFile(a)
+			data, err := os.ReadFile(a) // #nosec G304 -- a is a fixture inside t.TempDir.
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -130,7 +131,7 @@ func TestAtomicWriteFailurePreservesDestination(t *testing.T) {
 			if !errors.Is(err, failure) {
 				t.Fatalf("error %v", err)
 			}
-			data, err := os.ReadFile(path)
+			data, err := os.ReadFile(path) // #nosec G304 -- path is a fixture inside t.TempDir.
 			if exists && (err != nil || string(data) != "original") {
 				t.Fatalf("original changed: %q, %v", data, err)
 			}
@@ -173,11 +174,11 @@ func TestAtomicWriteReplacesWithoutFollowingAliases(t *testing.T) {
 			if err := WriteFile(dest, []byte("replacement")); err != nil {
 				t.Fatal(err)
 			}
-			data, _ := os.ReadFile(dest)
+			data, _ := os.ReadFile(dest) // #nosec G304 -- dest is a fixture inside t.TempDir.
 			if string(data) != "replacement" {
 				t.Fatalf("output %q", data)
 			}
-			data, _ = os.ReadFile(source)
+			data, _ = os.ReadFile(source) // #nosec G304 -- source is a fixture inside t.TempDir.
 			if string(data) != "source" {
 				t.Fatalf("source changed: %q", data)
 			}
@@ -201,7 +202,10 @@ func TestAtomicRenameFailureCleansUp(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err := w.Write([]byte("replacement"))
-		return err
+		if err != nil {
+			return fmt.Errorf("write replacement fixture: %w", err)
+		}
+		return nil
 	})
 	if err == nil {
 		t.Fatal("expected rename failure")

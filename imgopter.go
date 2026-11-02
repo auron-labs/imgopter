@@ -17,10 +17,14 @@ import (
 type Format int
 
 const (
-	FormatAuto Format = iota // keep input format
-	FormatJPEG               // JPEG output
-	FormatPNG                // PNG output
-	FormatWebP               // WebP output
+	// FormatAuto keeps the input format when an output encoder is available.
+	FormatAuto Format = iota
+	// FormatJPEG selects JPEG output.
+	FormatJPEG
+	// FormatPNG selects PNG output.
+	FormatPNG
+	// FormatWebP selects WebP output.
+	FormatWebP
 )
 
 // ParseFormat parses "auto", "jpeg"/"jpg", "png" or "webp" (case-insensitive).
@@ -46,8 +50,11 @@ func (f Format) String() string {
 		return "png"
 	case FormatWebP:
 		return "webp"
+	case FormatAuto:
+		fallthrough
+	default:
+		return "auto"
 	}
-	return "auto"
 }
 
 // Ext returns the canonical file extension for f, or "" for FormatAuto.
@@ -59,16 +66,21 @@ func (f Format) Ext() string {
 		return ".png"
 	case FormatWebP:
 		return ".webp"
+	case FormatAuto:
+		fallthrough
+	default:
+		return ""
 	}
-	return ""
 }
 
 // Mode selects how an image is fitted into MaxWidth/MaxHeight bounds.
 type Mode int
 
 const (
-	ModeFit  Mode = iota // contain: scale to fit inside MaxWidth×MaxHeight, preserve aspect
-	ModeCrop             // cover: scale to cover the box, then center-crop to exact dims
+	// ModeFit fits within the bounds while preserving the aspect ratio.
+	ModeFit Mode = iota
+	// ModeCrop covers the bounds, then center-crops to their exact dimensions.
+	ModeCrop
 )
 
 // ParseMode parses "fit" or "crop" (case-insensitive).
@@ -170,7 +182,7 @@ func Optimize(src []byte, o Options) (*Result, error) {
 
 	var buf bytes.Buffer
 	if err := encodeImage(&buf, img, format, o.Quality); err != nil {
-		return nil, fmt.Errorf("imgopter: encode %s: %w", format, err)
+		return nil, err
 	}
 
 	return &Result{
@@ -187,9 +199,9 @@ func Optimize(src []byte, o Options) (*Result, error) {
 
 // OptimizeFile reads srcPath and optimizes it. See Optimize.
 func OptimizeFile(srcPath string, o Options) (*Result, error) {
-	data, err := os.ReadFile(srcPath)
+	data, err := os.ReadFile(srcPath) // #nosec G304 -- The caller explicitly selects the local image to read.
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read image %s: %w", srcPath, err)
 	}
 	return Optimize(data, o)
 }
