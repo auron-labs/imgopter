@@ -5,6 +5,10 @@ multi-ecosystem-groups:
     schedule:
       interval: weekly
 updates:
+  - package-ecosystem: gomod
+    directory: /
+    multi-ecosystem-group: dependencies
+    patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     multi-ecosystem-group: dependencies
