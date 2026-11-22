@@ -1,9 +1,11 @@
 version: 2
+
+multi-ecosystem-groups:
+  dependencies:
+    schedule:
+      interval: weekly
 updates:
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-    groups:
-      actions-minor-patch:
-        update-types: [minor, patch]
+    multi-ecosystem-group: dependencies
+    patterns: ["*"]
