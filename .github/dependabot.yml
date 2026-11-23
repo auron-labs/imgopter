@@ -1,9 +1,15 @@
 version: 2
-updates:
-  - package-ecosystem: github-actions
-    directory: /
+
+multi-ecosystem-groups:
+  dependencies:
     schedule:
       interval: weekly
-    groups:
-      actions-minor-patch:
-        update-types: [minor, patch]
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    multi-ecosystem-group: dependencies
+    patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    multi-ecosystem-group: dependencies
+    patterns: ["*"]
